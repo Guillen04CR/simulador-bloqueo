@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de habilitación</title>
+<meta name="description" content="Simula la app de Mantenimiento: checklist, pase firmado con la llave de prueba y habilitación del equipo por Bluetooth.">
+<style>
+:root {
+  --ds-fondo: #f6f7f9;
+  --ds-superficie: #ffffff;
+  --ds-borde: #d9dde3;
+  --ds-texto: #1b1f24;
+  --ds-texto-suave: #5b6470;
+  --ds-acento: #1f5fbf;
+  --ds-acento-texto: #ffffff;
+  --ds-bien: #1e7a3c;
+  --ds-bien-fondo: #e3f3e8;
+  --ds-falla: #b42318;
+  --ds-falla-fondo: #fde8e6;
+  --ds-aviso: #8a5a00;
+  --ds-aviso-fondo: #fff4d6;
+  --ds-codigo-fondo: #eef0f3;
+  --ds-radio: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ds-fondo: #0f1216;
+    --ds-superficie: #181c22;
+    --ds-borde: #2c333c;
+    --ds-texto: #e7eaee;
+    --ds-texto-suave: #9aa4b1;
+    --ds-acento: #6ea0ff;
+    --ds-acento-texto: #0f1216;
+    --ds-bien: #5fd38a;
+    --ds-bien-fondo: #13301e;
+    --ds-falla: #ff8a7f;
+    --ds-falla-fondo: #3a1714;
+    --ds-aviso: #ffd27a;
+    --ds-aviso-fondo: #3a2c0b;
+    --ds-codigo-fondo: #222831;
+  }
+}
+:root[data-theme="dark"] {
+  --ds-fondo: #0f1216;
+  --ds-superficie: #181c22;
+  --ds-borde: #2c333c;
+  --ds-texto: #e7eaee;
+  --ds-texto-suave: #9aa4b1;
+  --ds-acento: #6ea0ff;
+  --ds-acento-texto: #0f1216;
+  --ds-bien: #5fd38a;
+  --ds-bien-fondo: #13301e;
+  --ds-falla: #ff8a7f;
+  --ds-falla-fondo: #3a1714;
+  --ds-aviso: #ffd27a;
+  --ds-aviso-fondo: #3a2c0b;
+  --ds-codigo-fondo: #222831;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ds-fondo); color: var(--ds-texto); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.pagina { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
+.aviso-prueba { background: var(--ds-aviso-fondo); color: var(--ds-aviso); border-radius: var(--ds-radio); padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+.cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.cabecera__titulo { font-size: 22px; font-weight: 700; margin: 0; }
+.cabecera__equipo { font-size: 15px; color: var(--ds-texto-suave); }
+.tarjeta { background: var(--ds-superficie); border: 1px solid var(--ds-borde); border-radius: var(--ds-radio); padding: 16px; margin-bottom: 12px; }
+.tarjeta__titulo { font-size: 17px; font-weight: 650; margin: 0 0 4px; }
+.tarjeta__ayuda { font-size: 14px; color: var(--ds-texto-suave); margin: 0 0 12px; }
+.campo { display: block; margin-bottom: 12px; }
+.campo__etiqueta { display: block; font-size: 14px; color: var(--ds-texto-suave); margin-bottom: 4px; }
+.campo__entrada { width: 100%; font: inherit; color: var(--ds-texto); background: var(--ds-fondo); border: 1px solid var(--ds-borde); border-radius: 8px; padding: 10px 12px; }
+.item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid var(--ds-borde); }
+.item__nombre { flex: 1; }
+.item__botones { display: flex; gap: 6px; }
+.boton { font: inherit; font-weight: 600; border: 1px solid var(--ds-borde); border-radius: 8px; padding: 10px 14px; background: var(--ds-superficie); color: var(--ds-texto); cursor: pointer; }
+.boton:disabled { opacity: 0.5; cursor: default; }
+.boton--principal { background: var(--ds-acento); border-color: var(--ds-acento); color: var(--ds-acento-texto); width: 100%; padding: 14px; font-size: 17px; }
+.boton--chico { padding: 8px 12px; font-size: 14px; }
+.boton--bien.is-activo { background: var(--ds-bien-fondo); border-color: var(--ds-bien); color: var(--ds-bien); }
+.boton--falla.is-activo { background: var(--ds-falla-fondo); border-color: var(--ds-falla); color: var(--ds-falla); }
+.resultado { border-radius: 8px; padding: 10px 12px; margin-top: 12px; font-size: 15px; }
+.resultado--bien { background: var(--ds-bien-fondo); color: var(--ds-bien); }
+.resultado--falla { background: var(--ds-falla-fondo); color: var(--ds-falla); }
+.resultado--aviso { background: var(--ds-aviso-fondo); color: var(--ds-aviso); }
+.estado { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 15px; margin-top: 12px; }
+.estado__clave { color: var(--ds-texto-suave); }
+.estado__valor { font-weight: 600; overflow-wrap: anywhere; }
+.codigo { font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--ds-codigo-fondo); border-radius: 8px; padding: 8px; overflow-wrap: anywhere; white-space: pre-wrap; margin: 8px 0 0; }
+.pruebas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.qr { display: flex; justify-content: center; padding: 12px; background: #ffffff; border-radius: 8px; }
+.qr__texto { text-align: center; font-size: 13px; color: var(--ds-texto-suave); overflow-wrap: anywhere; margin-top: 8px; }
+.oculto { display: none; }
+details > summary { cursor: pointer; font-weight: 650; }
+</style>
+</head>
+<body>
+<main class="pagina">
+  <div class="aviso-prueba">SIMULADOR. Este teléfono hace de servidor y firma con la llave de <b>prueba</b> (k=0), que solo acepta un ESP32 compilado para banco.</div>
+
+  <header class="cabecera">
+    <h1 class="cabecera__titulo">Habilitar equipo</h1>
+    <span class="cabecera__equipo" id="equipoTexto"></span>
+  </header>
+
+  <div class="resultado resultado--falla oculto" id="sinBluetooth" style="margin:0 0 12px"></div>
+
+  <!-- 1. Inspección (con señal) -->
+  <section class="tarjeta">
+    <h2 class="tarjeta__titulo">1. Inspección diaria</h2>
+    <p class="tarjeta__ayuda">Con señal, como en la app real. Si queda aprobada, el teléfono recibe el pase y lo guarda.</p>
+    <label class="campo">
+      <span class="campo__etiqueta">Operario</span>
+      <input class="campo__entrada" id="operario" autocomplete="name" placeholder="Nombre y apellido">
+    </label>
+    <label class="campo">
+      <span class="campo__etiqueta">Estado del equipo en la app (lo pone Mantenimiento)</span>
+      <select class="campo__entrada" id="estadoEquipo">
+        <option value="operativo">Operativo</option>
+        <option value="mantenimiento">En mantenimiento</option>
+        <option value="fuera_servicio">Fuera de servicio</option>
+      </select>
+    </label>
+    <div id="checklist"></div>
+    <button class="boton boton--principal" id="guardarInspeccion" style="margin-top:12px">Guardar inspección</button>
+    <div id="resultadoInspeccion"></div>
+  </section>
+
+  <!-- 2. Habilitar (sin señal, junto al equipo) -->
+  <section class="tarjeta">
+    <h2 class="tarjeta__titulo">2. Habilitar por Bluetooth</h2>
+    <p class="tarjeta__ayuda">Esto ya no necesita señal: junto al equipo, con la llave en ON.</p>
+    <div id="paseGuardado" style="margin-bottom:12px"></div>
+    <button class="boton boton--principal" id="habilitar">Conectar y habilitar</button>
+    <div id="resultadoHabilitar"></div>
+    <div class="estado oculto" id="estadoDispositivo"></div>
+  </section>
+
+  <!-- 3. Pruebas de rechazo -->
+  <section class="tarjeta">
+    <details>
+      <summary>3. Pruebas de rechazo</summary>
+      <p class="tarjeta__ayuda" style="margin-top:8px">Necesitan el equipo conectado (paso 2). El ESP32 tiene que rechazar cada una con el código indicado, sin borrar el pase bueno que ya tenga.</p>
+      <div class="pruebas">
+        <button class="boton boton--chico" data-prueba="estirado">Vigencia estirada<br><small>firma_invalida</small></button>
+        <button class="boton boton--chico" data-prueba="intrusa">Otra llave<br><small>firma_invalida</small></button>
+        <button class="boton boton--chico" data-prueba="otroEquipo">Otro equipo<br><small>otro_equipo</small></button>
+        <button class="boton boton--chico" data-prueba="vencido">Vencido<br><small>vencido</small></button>
+        <button class="boton boton--chico" data-prueba="version">Versión 2<br><small>version_no_soportada</small></button>
+        <button class="boton boton--chico" data-prueba="dosMinutos">Vence en 2 min<br><small>aceptado</small></button>
+      </div>
+      <div id="resultadoPruebas"></div>
+    </details>
+  </section>
+
+  <!-- 4. QR -->
+  <section class="tarjeta">
+    <details>
+      <summary>4. QR de este equipo</summary>
+      <p class="tarjeta__ayuda" style="margin-top:8px">Mostralo en la laptop y escanealo con la cámara del teléfono: abre esta misma página con el equipo ya elegido.</p>
+      <div class="qr" id="qr"></div>
+      <div class="qr__texto" id="qrTexto"></div>
+    </details>
+  </section>
+
+  <section class="tarjeta">
+    <details>
+      <summary>Detalles técnicos</summary>
+      <pre class="codigo" id="detalle">Sin pase todavía.</pre>
+    </details>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+"use strict";
+
+// ---------------- Contrato (claude/Contrato_ESP32_App_v1.md) ----------------
+
+const SERVICIO = "bf5c8a37-95d1-4d8b-9fe5-32fd95b9e5e5";
+const CAR_ESTADO = "dd63ab6f-bd0d-46d2-b245-09927ea7b884";
+const CAR_PASE = "42606d5f-4bec-4207-a62d-4b275d7d7e57";
+
+// Llave de PRUEBA k=0. Es pública a propósito (firmware/test/vectores/llave_prueba_k0.pem).
+const LLAVE_PRUEBA_K0 = {
+  kty: "EC", crv: "P-256",
+  d: "FIRYGPVK7U-rv_8Axrpg4VZH4rpMedtphuWEn4MWxV8",
+  x: "V0K-cV0vE01OzwKbxgqkBPlQ6wFKJ83pXhBzNbsGXEE",
+  y: "i18HHSjW8EUovtxlJtLT1qZqZnkD53uKszkkmBYbXU8",
+};
+
+// Checklist de ejemplo. En la app real sale de mant.ChecklistDiarioItems.
+const ACTIVIDADES = ["Frenos", "Luces y direccionales", "Llantas", "Nivel de aceite", "Cinturón de seguridad", "Extintor"];
+
+const MOTIVO_TEXTO = {
+  equipo_fuera_de_servicio: "El equipo está fuera de servicio.",
+  equipo_en_mantenimiento: "El equipo está en mantenimiento.",
+  sin_inspeccion_hoy: "No hay inspección de hoy.",
+  checklist_incompleto: "El checklist no está aprobado.",
+  checklist_aprobado: "Checklist aprobado.",
+};
+
+const RESULTADO_TEXTO = {
+  aceptado: "El equipo aceptó el pase.",
+  formato_invalido: "El equipo no pudo leer el pase.",
+  version_no_soportada: "El equipo no conoce esta versión de pase.",
+  llave_desconocida: "El equipo no conoce la llave que firmó el pase.",
+  firma_invalida: "La firma no es válida: el pase fue alterado o no lo firmó el servidor.",
+  otro_equipo: "Ese pase es de otro equipo.",
+  vencido: "El pase ya venció.",
+};
+
+// ---------------- Equipo (viene del QR) ----------------
+
+const parametros = new URLSearchParams(location.search);
+const EQUIPO = (parametros.get("equipo") || "PICK-01").trim().toUpperCase();
+document.getElementById("equipoTexto").textContent = EQUIPO + " · ADL-" + EQUIPO;
+
+// ---------------- Memoria del teléfono ----------------
+// Simula lo que la app guarda: la inspección de hoy y el pase. Si el navegador
+// no deja guardar (modo privado), la página sigue funcionando sin recordar.
+
+function leerGuardado(clave) {
+  try { return JSON.parse(localStorage.getItem(clave) || "null"); }
+  catch { /* sin almacenamiento o dato corrupto: se trata como "no hay nada" */ return null; }
+}
+
+function guardar(clave, valor) {
+  try { localStorage.setItem(clave, JSON.stringify(valor)); }
+  catch { /* sin almacenamiento: el dato vive mientras la página esté abierta */ }
+}
+
+const CLAVE_PASE = "pase:" + EQUIPO;
+const CLAVE_OPERARIO = "operario";
+
+// ---------------- Regla (la misma de regla_referencia.py) ----------------
+
+const CR_SEG = -6 * 3600;
+
+function diaCr(unix) { return Math.floor((unix + CR_SEG) / 86400); }
+
+// La medianoche de CR que cierra el día de 'unix': 06:00 UTC del día siguiente.
+function medianocheCr(unix) { return (diaCr(unix) + 1) * 86400 - CR_SEG; }
+
+function motivoAutorizacion(estadoEquipo, inspeccion, ahora) {
+  if (estadoEquipo === "fuera_servicio") return "equipo_fuera_de_servicio";
+  if (estadoEquipo === "mantenimiento") return "equipo_en_mantenimiento";
+  if (!inspeccion || diaCr(inspeccion.fecha) !== diaCr(ahora)) return "sin_inspeccion_hoy";
+  if (ACTIVIDADES.some(a => inspeccion.respuestas[a] !== "bien")) return "checklist_incompleto";
+  return "checklist_aprobado";
+}
+
+// ---------------- Firma (lo que haría Key Vault) ----------------
+
+function b64url(bytes) {
+  let s = "";
+  for (const b of new Uint8Array(bytes)) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function idNuevo() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, "0")).join("");
+}
+
+let llaveK0 = null;
+async function llavePrueba() {
+  if (!llaveK0) {
+    llaveK0 = await crypto.subtle.importKey("jwk", LLAVE_PRUEBA_K0, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  }
+  return llaveK0;
+}
+
+// WebCrypto ya devuelve la firma ECDSA en crudo (r‖s, 64 bytes): el mismo
+// formato que Key Vault y que espera el ESP32.
+async function firmarPase(campos, llave) {
+  const datos = new TextEncoder().encode(JSON.stringify(campos));
+  const firma = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, llave || await llavePrueba(), datos);
+  return { texto: JSON.stringify(campos) + "." + b64url(firma), campos };
+}
+
+function camposPase(operario, inspeccionFecha, ahora, cambios) {
+  const base = {
+    v: 1, k: 0, eq: EQUIPO,
+    op: Array.from(operario).slice(0, 24).join(""),
+    ins: inspeccionFecha, emi: ahora, vh: medianocheCr(inspeccionFecha), id: idNuevo(),
+  };
+  return Object.assign(base, cambios || {});
+}
+
+// ---------------- Pantalla: inspección ----------------
+
+const respuestas = {};
+
+function dibujarChecklist() {
+  const caja = document.getElementById("checklist");
+  caja.innerHTML = "";
+  for (const actividad of ACTIVIDADES) {
+    const fila = document.createElement("div");
+    fila.className = "item";
+    fila.innerHTML = '<span class="item__nombre"></span><span class="item__botones">'
+      + '<button class="boton boton--chico boton--bien" data-r="bien">Bien</button>'
+      + '<button class="boton boton--chico boton--falla" data-r="falla">Falla</button></span>';
+    fila.querySelector(".item__nombre").textContent = actividad;
+    for (const b of fila.querySelectorAll("button")) {
+      b.classList.toggle("is-activo", respuestas[actividad] === b.dataset.r);
+      b.addEventListener("click", () => { respuestas[actividad] = b.dataset.r; dibujarChecklist(); });
+    }
+    caja.appendChild(fila);
+  }
+}
+
+function mostrar(idCaja, tipo, texto) {
+  const caja = document.getElementById(idCaja);
+  caja.className = "resultado resultado--" + tipo;
+  caja.textContent = texto;
+}
+
+function horaCr(unix) {
+  const d = new Date((unix + CR_SEG) * 1000);
+  return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
+}
+
+async function guardarInspeccion() {
+  const operario = document.getElementById("operario").value.trim();
+  if (!operario) {
+    mostrar("resultadoInspeccion", "falla", "Escribí el nombre del operario.");
+    return;
+  }
+  guardar(CLAVE_OPERARIO, operario);
+
+  const ahora = Math.floor(Date.now() / 1000);
+  const inspeccion = { fecha: ahora, respuestas: Object.assign({}, respuestas) };
+  const motivo = motivoAutorizacion(document.getElementById("estadoEquipo").value, inspeccion, ahora);
+  if (motivo !== "checklist_aprobado") {
+    const faltan = ACTIVIDADES.filter(a => respuestas[a] !== "bien");
+    const detalle = motivo === "checklist_incompleto" ? " Falta o falló: " + faltan.join(", ") + "." : "";
+    mostrar("resultadoInspeccion", "falla", MOTIVO_TEXTO[motivo] + detalle + " No hay pase.");
+    return;
+  }
+
+  const pase = await firmarPase(camposPase(operario, ahora, ahora));
+  guardar(CLAVE_PASE, pase);
+  mostrar("resultadoInspeccion", "bien", "Inspección aprobada. Pase guardado en el teléfono, vale hasta las 00:00 de hoy. Ya podés ir al equipo aunque no haya señal.");
+  dibujarPaseGuardado();
+}
+
+function dibujarPaseGuardado() {
+  const pase = leerGuardado(CLAVE_PASE);
+  const caja = document.getElementById("paseGuardado");
+  const ahora = Math.floor(Date.now() / 1000);
+  document.getElementById("detalle").textContent = pase ? pase.texto + "\n\n" + pase.texto.length + " bytes" : "Sin pase todavía.";
+  if (!pase) {
+    caja.className = "resultado resultado--aviso";
+    caja.textContent = "No hay pase guardado: hacé primero la inspección (paso 1).";
+    return;
+  }
+  if (ahora >= pase.campos.vh) {
+    caja.className = "resultado resultado--aviso";
+    caja.textContent = "El pase guardado ya venció. Hacé la inspección de hoy.";
+    return;
+  }
+  caja.className = "resultado resultado--bien";
+  caja.textContent = "Pase de " + pase.campos.op + " guardado. Vale hasta las 00:00 de hoy.";
+}
+
+// ---------------- Bluetooth ----------------
+
+let dispositivo = null;
+let carEstado = null;
+let carPase = null;
+let ultimoEstado = null;
+
+// Web Bluetooth no deja dos operaciones GATT a la vez ("GATT operation already
+// in progress"): todas pasan por esta fila.
+let filaGatt = Promise.resolve();
+function enFila(operacion) {
+  const siguiente = filaGatt.then(operacion, operacion);
+  filaGatt = siguiente.catch(() => { /* el error ya lo recibe quien llamó */ });
+  return siguiente;
+}
+
+async function leerEstado() {
+  const valor = await enFila(() => carEstado.readValue());
+  ultimoEstado = JSON.parse(new TextDecoder().decode(valor));
+  dibujarEstado();
+  return ultimoEstado;
+}
+
+let lecturaPendiente = false;
+// La notificación puede llegar recortada (un iPhone negocia MTU ~185 y el
+// estado pesa ~250 bytes): se usa como aviso y se LEE el estado completo.
+function alNotificar() {
+  if (lecturaPendiente) return;
+  lecturaPendiente = true;
+  leerEstado().catch(() => { /* la próxima notificación lo reintenta */ }).finally(() => { lecturaPendiente = false; });
+}
+
+function fila(clave, valor) {
+  return '<span class="estado__clave">' + clave + '</span><span class="estado__valor">' + valor + "</span>";
+}
+
+function escapar(texto) {
+  return String(texto).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function dibujarEstado() {
+  const e = ultimoEstado;
+  const caja = document.getElementById("estadoDispositivo");
+  if (!e) { caja.classList.add("oculto"); return; }
+  caja.classList.remove("oculto");
+  caja.innerHTML = [
+    fila("Equipo", escapar(e.equipo)),
+    fila("Llave", e.llave ? "ON" : "OFF"),
+    fila("Motor", e.motor ? "en marcha" : "parado"),
+    fila("Relé", e.rele ? "HABILITADO" : "bloqueado"),
+    fila("Pase", e.pase ? escapar(e.pase.op) + " hasta " + horaCr(e.pase.vh) : "ninguno vigente"),
+    fila("Último", e.ultimo ? escapar(e.ultimo.resultado) : "—"),
+    fila("Sin autorización", String(e.arranquesSinAutorizacion)),
+    fila("Hora del equipo", e.hora ? horaCr(e.hora) + " CR" : "sin hora"),
+  ].join("");
+}
+
+async function conectar() {
+  if (dispositivo && dispositivo.gatt.connected) return;
+  // El navegador exige que esto salga de un toque del usuario.
+  dispositivo = await navigator.bluetooth.requestDevice({
+    filters: [{ name: "ADL-" + EQUIPO }],
+    optionalServices: [SERVICIO],
+  });
+  dispositivo.addEventListener("gattserverdisconnected", () => {
+    mostrar("resultadoHabilitar", "aviso", "Se perdió la conexión con el equipo. Acercate y tocá de nuevo.");
+  });
+  const servidor = await dispositivo.gatt.connect();
+  const servicio = await servidor.getPrimaryService(SERVICIO);
+  carEstado = await servicio.getCharacteristic(CAR_ESTADO);
+  carPase = await servicio.getCharacteristic(CAR_PASE);
+  carEstado.addEventListener("characteristicvaluechanged", alNotificar);
+  await enFila(() => carEstado.startNotifications());
+  await leerEstado();
+}
+
+function esperar(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Escribe el pase y espera que `estado` reporte el resultado de ESE pase
+// (estado.ultimo.id === id), como pide el contrato §6.2.
+async function escribirPase(texto, id) {
+  const bytes = new TextEncoder().encode(texto);
+  await enFila(() => carPase.writeValueWithResponse ? carPase.writeValueWithResponse(bytes) : carPase.writeValue(bytes));
+  const limite = Date.now() + 3000;
+  while (Date.now() < limite) {
+    await esperar(250);
+    const e = await leerEstado();
+    if (e.ultimo && e.ultimo.id === id) return e.ultimo.resultado;
+  }
+  return null;
+}
+
+async function habilitar() {
+  const pase = leerGuardado(CLAVE_PASE);
+  if (!pase) {
+    mostrar("resultadoHabilitar", "falla", "No hay pase guardado: hacé primero la inspección (paso 1).");
+    return;
+  }
+  try {
+    mostrar("resultadoHabilitar", "aviso", "Buscando ADL-" + EQUIPO + "… (la llave tiene que estar en ON)");
+    await conectar();
+    mostrar("resultadoHabilitar", "aviso", "Conectado. Enviando el pase…");
+    const resultado = await escribirPase(pase.texto, pase.campos.id);
+    if (resultado === null) {
+      mostrar("resultadoHabilitar", "falla", "El equipo no respondió. Acercate y probá de nuevo.");
+      return;
+    }
+    mostrar("resultadoHabilitar", resultado === "aceptado" ? "bien" : "falla",
+      (RESULTADO_TEXTO[resultado] || resultado) + (resultado === "aceptado" ? " Ya podés arrancar." : ""));
+  } catch (err) {
+    mostrar("resultadoHabilitar", "falla", errorBluetooth(err));
+  }
+}
+
+function errorBluetooth(err) {
+  if (err && err.name === "NotFoundError") return "No se eligió ningún equipo. Revisá que la llave esté en ON y que el nombre sea ADL-" + EQUIPO + ".";
+  if (err && err.name === "SecurityError") return "El navegador no deja usar Bluetooth en esta página. Tiene que abrirse por https.";
+  return "Error de Bluetooth: " + (err && err.message ? err.message : err);
+}
+
+// ---------------- Pruebas de rechazo ----------------
+
+async function pasePrueba(tipo) {
+  const ahora = Math.floor(Date.now() / 1000);
+  const operario = document.getElementById("operario").value.trim() || "Prueba";
+  if (tipo === "estirado") {
+    // Se firma bien y DESPUÉS se cambia la vigencia, como haría alguien sin la llave.
+    const p = await firmarPase(camposPase(operario, ahora, ahora));
+    const vh = String(p.campos.vh);
+    return { texto: p.texto.replace('"vh":' + vh, '"vh":' + (p.campos.vh + 7 * 86400)), id: p.campos.id };
+  }
+  if (tipo === "intrusa") {
+    const intrusa = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+    const p = await firmarPase(camposPase(operario, ahora, ahora), intrusa.privateKey);
+    return { texto: p.texto, id: p.campos.id };
+  }
+  const cambios = {
+    otroEquipo: { eq: EQUIPO === "DP-01" ? "PICK-01" : "DP-01" },
+    vencido: { vh: ahora - 60, ins: ahora - 86400, emi: ahora - 3600 },
+    version: { v: 2 },
+    dosMinutos: { vh: ahora + 120 },
+  }[tipo];
+  const p = await firmarPase(camposPase(operario, ahora, ahora, cambios));
+  return { texto: p.texto, id: p.campos.id };
+}
+
+async function correrPrueba(tipo) {
+  if (!carPase || !dispositivo || !dispositivo.gatt.connected) {
+    mostrar("resultadoPruebas", "aviso", "Primero conectá el equipo (paso 2).");
+    return;
+  }
+  try {
+    const p = await pasePrueba(tipo);
+    const resultado = await escribirPase(p.texto, p.id);
+    mostrar("resultadoPruebas", resultado === null ? "falla" : "aviso",
+      resultado === null ? "El equipo no respondió." : "Respuesta del equipo: " + resultado + ". " + (RESULTADO_TEXTO[resultado] || ""));
+  } catch (err) {
+    mostrar("resultadoPruebas", "falla", errorBluetooth(err));
+  }
+}
+
+// ---------------- QR ----------------
+
+function dibujarQr() {
+  const url = location.origin + location.pathname + "?equipo=" + encodeURIComponent(EQUIPO);
+  document.getElementById("qrTexto").textContent = url;
+  if (typeof QRCode === "undefined") {
+    document.getElementById("qr").textContent = "No se pudo cargar el generador de QR (sin internet).";
+    return;
+  }
+  new QRCode(document.getElementById("qr"), { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+}
+
+// ---------------- Arranque ----------------
+
+function revisarNavegador() {
+  const caja = document.getElementById("sinBluetooth");
+  if (!window.isSecureContext) {
+    caja.textContent = "Esta página se abrió sin https: el navegador no va a dejar usar Bluetooth.";
+    caja.classList.remove("oculto");
+    return;
+  }
+  if (!navigator.bluetooth) {
+    caja.textContent = "Este navegador no tiene Bluetooth web. En Android usá Chrome; en iPhone, la app Bluefy (Safari y Chrome de iPhone no lo traen).";
+    caja.classList.remove("oculto");
+  }
+}
+
+document.getElementById("operario").value = leerGuardado(CLAVE_OPERARIO) || "";
+document.getElementById("guardarInspeccion").addEventListener("click", guardarInspeccion);
+document.getElementById("habilitar").addEventListener("click", habilitar);
+for (const b of document.querySelectorAll("[data-prueba]")) {
+  b.addEventListener("click", () => correrPrueba(b.dataset.prueba));
+}
+dibujarChecklist();
+dibujarPaseGuardado();
+dibujarQr();
+revisarNavegador();
+</script>
+</body>
+</html>
