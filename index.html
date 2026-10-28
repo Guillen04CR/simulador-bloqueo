@@ -140,7 +140,7 @@ details > summary { cursor: pointer; font-weight: 650; }
   <section class="tarjeta">
     <details>
       <summary>3. Pruebas de rechazo</summary>
-      <p class="tarjeta__ayuda" style="margin-top:8px">Necesitan el equipo conectado (paso 2). El ESP32 tiene que rechazar cada una con el código indicado, sin borrar el pase bueno que ya tenga.</p>
+      <p class="tarjeta__ayuda" style="margin-top:8px">Cada botón se conecta al equipo, escribe un pase de prueba y se desconecta (la llave tiene que estar en ON). El ESP32 tiene que rechazar cada una con el código indicado, sin borrar el pase bueno que ya tenga.</p>
       <div class="pruebas">
         <button class="boton boton--chico" data-prueba="estirado">Vigencia estirada<br><small>firma_invalida</small></button>
         <button class="boton boton--chico" data-prueba="intrusa">Otra llave<br><small>firma_invalida</small></button>
@@ -413,23 +413,33 @@ function dibujarEstado() {
     fila("Llave", e.llave ? "ON" : "OFF"),
     fila("Motor", e.motor ? "en marcha" : "parado"),
     fila("Relé", e.rele ? "HABILITADO" : "bloqueado"),
-    fila("Pase", e.pase ? escapar(e.pase.op) + " hasta " + horaCr(e.pase.vh) : "ninguno vigente"),
+    // El nombre del operario ya no viaja en `estado` (contrato §6.1, 28-oct).
+    fila("Pase", e.pase ? "vigente hasta " + horaCr(e.pase.vh) : "ninguno vigente"),
     fila("Último", e.ultimo ? escapar(e.ultimo.resultado) : "—"),
     fila("Sin autorización", String(e.arranquesSinAutorizacion)),
     fila("Hora del equipo", e.hora ? horaCr(e.hora) + " CR" : "sin hora"),
   ].join("");
 }
 
+// Distingue el corte que pidió la página del que pasó solo (alejarse, llave
+// en OFF): solo el segundo se le avisa al operario.
+let desconexionPedida = false;
+
 async function conectar() {
   if (dispositivo && dispositivo.gatt.connected) return;
-  // El navegador exige que esto salga de un toque del usuario.
-  dispositivo = await navigator.bluetooth.requestDevice({
-    filters: [{ name: "ADL-" + EQUIPO }],
-    optionalServices: [SERVICIO],
-  });
-  dispositivo.addEventListener("gattserverdisconnected", () => {
-    mostrar("resultadoHabilitar", "aviso", "Se perdió la conexión con el equipo. Acercate y tocá de nuevo.");
-  });
+  // La primera vez el navegador muestra la lista y exige un toque del usuario:
+  // por eso requestDevice va antes que cualquier otro await. Las siguientes
+  // se reconecta al mismo equipo sin preguntar.
+  if (!dispositivo) {
+    dispositivo = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "ADL-" + EQUIPO }],
+      optionalServices: [SERVICIO],
+    });
+    dispositivo.addEventListener("gattserverdisconnected", () => {
+      if (desconexionPedida) { desconexionPedida = false; return; }
+      mostrar("resultadoHabilitar", "aviso", "Se perdió la conexión con el equipo. Acercate y tocá de nuevo.");
+    });
+  }
   const servidor = await dispositivo.gatt.connect();
   const servicio = await servidor.getPrimaryService(SERVICIO);
   carEstado = await servicio.getCharacteristic(CAR_ESTADO);
@@ -437,6 +447,16 @@ async function conectar() {
   carEstado.addEventListener("characteristicvaluechanged", alNotificar);
   await enFila(() => carEstado.startNotifications());
   await leerEstado();
+}
+
+// Contrato §6.2: con el resultado en la mano, la app suelta el equipo. Mientras
+// hay un teléfono conectado el ESP32 no se anuncia, y nadie más lo encuentra:
+// así fue como, el 28-oct, nRF Connect no veía el equipo porque Bluefy seguía
+// conectado en segundo plano.
+function desconectar() {
+  if (!dispositivo || !dispositivo.gatt.connected) return;
+  desconexionPedida = true;
+  dispositivo.gatt.disconnect();
 }
 
 function esperar(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -474,6 +494,8 @@ async function habilitar() {
       (RESULTADO_TEXTO[resultado] || resultado) + (resultado === "aceptado" ? " Ya podés arrancar." : ""));
   } catch (err) {
     mostrar("resultadoHabilitar", "falla", errorBluetooth(err));
+  } finally {
+    desconectar();
   }
 }
 
@@ -510,17 +532,19 @@ async function pasePrueba(tipo) {
 }
 
 async function correrPrueba(tipo) {
-  if (!carPase || !dispositivo || !dispositivo.gatt.connected) {
-    mostrar("resultadoPruebas", "aviso", "Primero conectá el equipo (paso 2).");
-    return;
-  }
   try {
+    mostrar("resultadoPruebas", "aviso", "Conectando con ADL-" + EQUIPO + "…");
+    // Conectar primero: si es la primera vez, requestDevice necesita el toque
+    // del usuario, y armar el pase antes (WebCrypto es async) lo perdería.
+    await conectar();
     const p = await pasePrueba(tipo);
     const resultado = await escribirPase(p.texto, p.id);
     mostrar("resultadoPruebas", resultado === null ? "falla" : "aviso",
       resultado === null ? "El equipo no respondió." : "Respuesta del equipo: " + resultado + ". " + (RESULTADO_TEXTO[resultado] || ""));
   } catch (err) {
     mostrar("resultadoPruebas", "falla", errorBluetooth(err));
+  } finally {
+    desconectar();
   }
 }
 
