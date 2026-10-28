@@ -54,7 +54,7 @@
   --ds-falla: #ff8a7f;
   --ds-falla-fondo: #3a1714;
   --ds-aviso: #ffd27a;
-  --ds-aviso-fondo: #3a2c0b;
+  --ds-aviso-fondo: #050403;
   --ds-codigo-fondo: #222831;
 }
 * { box-sizing: border-box; }
@@ -140,14 +140,14 @@ details > summary { cursor: pointer; font-weight: 650; }
   <section class="tarjeta">
     <details>
       <summary>3. Pruebas de rechazo</summary>
-      <p class="tarjeta__ayuda" style="margin-top:8px">Cada botón se conecta al equipo, escribe un pase de prueba y se desconecta (la llave tiene que estar en ON). El ESP32 tiene que rechazar cada una con el código indicado, sin borrar el pase bueno que ya tenga.</p>
+      <p class="tarjeta__ayuda" style="margin-top:8px">Cada botón se conecta al equipo, escribe un pase de prueba y se desconecta (la llave tiene que estar en ON). Los cinco primeros se rechazan y <b>no tocan el pase bueno</b>: el equipo sigue habilitado, a propósito. Para ver cómo se bloquea solo, usá <b>Vence en 20 s</b>, que reemplaza el pase del día.</p>
       <div class="pruebas">
         <button class="boton boton--chico" data-prueba="estirado">Vigencia estirada<br><small>firma_invalida</small></button>
         <button class="boton boton--chico" data-prueba="intrusa">Otra llave<br><small>firma_invalida</small></button>
         <button class="boton boton--chico" data-prueba="otroEquipo">Otro equipo<br><small>otro_equipo</small></button>
         <button class="boton boton--chico" data-prueba="vencido">Vencido<br><small>vencido</small></button>
         <button class="boton boton--chico" data-prueba="version">Versión 2<br><small>version_no_soportada</small></button>
-        <button class="boton boton--chico" data-prueba="dosMinutos">Vence en 2 min<br><small>aceptado</small></button>
+        <button class="boton boton--chico" data-prueba="veinteSegundos">Vence en 20 s<br><small>aceptado, y a los 20 s bloquea</small></button>
       </div>
       <div id="resultadoPruebas"></div>
     </details>
@@ -525,7 +525,9 @@ async function pasePrueba(tipo) {
     otroEquipo: { eq: EQUIPO === "DP-01" ? "PICK-01" : "DP-01" },
     vencido: { vh: ahora - 60, ins: ahora - 86400, emi: ahora - 3600 },
     version: { v: 2 },
-    dosMinutos: { vh: ahora + 120 },
+    // Es el único botón que REEMPLAZA el pase del día: los demás se rechazan y
+    // un rechazo nunca toca el pase bueno. Sirve para ver el vencimiento en vivo.
+    veinteSegundos: { vh: ahora + 20 },
   }[tipo];
   const p = await firmarPase(camposPase(operario, ahora, ahora, cambios));
   return { texto: p.texto, id: p.campos.id };
